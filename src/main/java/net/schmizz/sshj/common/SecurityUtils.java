@@ -15,13 +15,14 @@
  */
 package net.schmizz.sshj.common;
 
-import java.security.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
 import javax.crypto.NoSuchPaddingException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.security.*;
 
 import static java.lang.String.format;
 
@@ -68,15 +69,15 @@ public class SecurityUtils {
             }
 
             if (securityProvider == null) {
-                MessageDigest.getInstance("MD5", provider.getName());
-                KeyAgreement.getInstance("DH", provider.getName());
+                MessageDigest.getInstance("MD5", provider);
+                KeyAgreement.getInstance("DH", provider);
                 setSecurityProvider(provider.getName());
                 return true;
             }
         } catch (NoSuchAlgorithmException e) {
             LOG.info(format("Security Provider '%s' does not support necessary algorithm", providerClassName), e);
-        } catch (NoSuchProviderException e) {
-            LOG.info("Registration of Security Provider '{}' unexpectedly failed", providerClassName);
+        } catch (Exception e) {
+            LOG.info(format("Registration of Security Provider '%s' unexpectedly failed", providerClassName), e);
         }
         return false;
     }

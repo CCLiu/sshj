@@ -15,15 +15,7 @@
  */
 package net.schmizz.sshj.common;
 
-import java.math.BigInteger;
-import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.interfaces.ECPublicKey;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-
+import com.hierynomus.sshj.secg.SecgUtils;
 import org.bouncycastle.asn1.nist.NISTNamedCurves;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.jce.spec.ECParameterSpec;
@@ -32,9 +24,18 @@ import org.bouncycastle.math.ec.ECPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.hierynomus.sshj.secg.SecgUtils;
+import java.math.BigInteger;
+import java.security.GeneralSecurityException;
+import java.security.Key;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.interfaces.ECKey;
+import java.security.interfaces.ECPublicKey;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-public class ECDSAVariationsAdapter {
+class ECDSAVariationsAdapter {
 
     private final static String BASE_ALGORITHM_NAME = "ecdsa-sha2-nistp";
 
@@ -53,7 +54,7 @@ public class ECDSAVariationsAdapter {
         SUPPORTED_CURVES.put("521", "nistp521");
     }
 
-    public static PublicKey readPubKeyFromBuffer(Buffer<?> buf, String variation) throws GeneralSecurityException {
+    static PublicKey readPubKeyFromBuffer(Buffer<?> buf, String variation) throws GeneralSecurityException {
         String algorithm = BASE_ALGORITHM_NAME + variation;
         if (!SecurityUtils.isBouncyCastleRegistered()) {
             throw new GeneralSecurityException("BouncyCastle is required to read a key of type " + algorithm);
@@ -92,7 +93,7 @@ public class ECDSAVariationsAdapter {
         }
     }
 
-    public static void writePubKeyContentsIntoBuffer(PublicKey pk, Buffer<?> buf) {
+    static void writePubKeyContentsIntoBuffer(PublicKey pk, Buffer<?> buf) {
         final ECPublicKey ecdsa = (ECPublicKey) pk;
         byte[] encoded = SecgUtils.getEncoded(ecdsa.getW(), ecdsa.getParams().getCurve());
 
@@ -100,8 +101,12 @@ public class ECDSAVariationsAdapter {
             .putBytes(encoded);
     }
 
-    public static int fieldSizeFromKey(ECPublicKey ecPublicKey) {
-        return ecPublicKey.getParams().getCurve().getField().getFieldSize();
+    static boolean isECKeyWithFieldSize(Key key, int fieldSize) {
+        return "ECDSA".equals(key.getAlgorithm())
+                && fieldSizeFromKey((ECKey) key) == fieldSize;
     }
 
+    private static int fieldSizeFromKey(ECKey ecPublicKey) {
+        return ecPublicKey.getParams().getCurve().getField().getFieldSize();
+    }
 }
