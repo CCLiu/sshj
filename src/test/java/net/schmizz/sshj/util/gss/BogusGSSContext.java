@@ -15,8 +15,9 @@
  */
 package net.schmizz.sshj.util.gss;
 
-import net.schmizz.sshj.common.IOUtils;
 import org.ietf.jgss.*;
+
+import net.schmizz.sshj.common.IOUtils;
 
 import java.io.InputStream;
 import java.io.OutputStream;

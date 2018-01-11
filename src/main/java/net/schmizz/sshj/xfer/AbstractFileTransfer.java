@@ -16,6 +16,7 @@
 package net.schmizz.sshj.xfer;
 
 import net.schmizz.sshj.common.LoggerFactory;
+
 import org.slf4j.Logger;
 
 public abstract class AbstractFileTransfer {

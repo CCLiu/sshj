@@ -15,12 +15,22 @@
  */
 package net.schmizz.sshj;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
+
+import org.slf4j.Logger;
+
 import com.hierynomus.sshj.signature.SignatureEdDSA;
 import com.hierynomus.sshj.transport.cipher.BlockCiphers;
 import com.hierynomus.sshj.transport.cipher.StreamCiphers;
 import com.hierynomus.sshj.transport.kex.DHGroups;
 import com.hierynomus.sshj.transport.kex.ExtendedDHGroups;
 import com.hierynomus.sshj.userauth.keyprovider.OpenSSHKeyV1KeyFile;
+
 import net.schmizz.keepalive.KeepAliveProvider;
 import net.schmizz.sshj.common.Factory;
 import net.schmizz.sshj.common.LoggerFactory;
@@ -28,13 +38,26 @@ import net.schmizz.sshj.common.SecurityUtils;
 import net.schmizz.sshj.signature.SignatureDSA;
 import net.schmizz.sshj.signature.SignatureECDSA;
 import net.schmizz.sshj.signature.SignatureRSA;
-import net.schmizz.sshj.transport.cipher.*;
+import net.schmizz.sshj.transport.cipher.AES128CBC;
+import net.schmizz.sshj.transport.cipher.AES128CTR;
+import net.schmizz.sshj.transport.cipher.AES192CBC;
+import net.schmizz.sshj.transport.cipher.AES192CTR;
+import net.schmizz.sshj.transport.cipher.AES256CBC;
+import net.schmizz.sshj.transport.cipher.AES256CTR;
+import net.schmizz.sshj.transport.cipher.BlowfishCBC;
+import net.schmizz.sshj.transport.cipher.Cipher;
+import net.schmizz.sshj.transport.cipher.TripleDESCBC;
 import net.schmizz.sshj.transport.compression.NoneCompression;
 import net.schmizz.sshj.transport.kex.Curve25519SHA256;
 import net.schmizz.sshj.transport.kex.DHGexSHA1;
 import net.schmizz.sshj.transport.kex.DHGexSHA256;
 import net.schmizz.sshj.transport.kex.ECDHNistP;
-import net.schmizz.sshj.transport.mac.*;
+import net.schmizz.sshj.transport.mac.HMACMD5;
+import net.schmizz.sshj.transport.mac.HMACMD596;
+import net.schmizz.sshj.transport.mac.HMACSHA1;
+import net.schmizz.sshj.transport.mac.HMACSHA196;
+import net.schmizz.sshj.transport.mac.HMACSHA2256;
+import net.schmizz.sshj.transport.mac.HMACSHA2512;
 import net.schmizz.sshj.transport.random.BouncyCastleRandom;
 import net.schmizz.sshj.transport.random.JCERandom;
 import net.schmizz.sshj.transport.random.SingletonRandomFactory;
@@ -42,10 +65,6 @@ import net.schmizz.sshj.userauth.keyprovider.OpenSSHKeyFile;
 import net.schmizz.sshj.userauth.keyprovider.PKCS5KeyFile;
 import net.schmizz.sshj.userauth.keyprovider.PKCS8KeyFile;
 import net.schmizz.sshj.userauth.keyprovider.PuTTYKeyFile;
-import org.slf4j.Logger;
-
-import java.io.IOException;
-import java.util.*;
 
 /**
  * A {@link net.schmizz.sshj.Config} that is initialized as follows. Items marked with an asterisk are added to the config only if
@@ -53,7 +72,9 @@ import java.util.*;
  * <p/>
  * <ul>
  * <li>{@link net.schmizz.sshj.ConfigImpl#setKeyExchangeFactories Key exchange}: {@link net.schmizz.sshj.transport.kex.DHG14}*, {@link net.schmizz.sshj.transport.kex.DHG1}</li>
- * <li>{@link net.schmizz.sshj.ConfigImpl#setCipherFactories Ciphers}: {@link BlockCiphers}, {@link StreamCiphers} [1]</li>
+ * <li>{@link net.schmizz.sshj.ConfigImpl#setCipherFactories Ciphers} [1]: {@link net.schmizz.sshj.transport.cipher.AES128CTR}, {@link net.schmizz.sshj.transport.cipher.AES192CTR}, {@link net.schmizz.sshj.transport.cipher.AES256CTR},
+ * {@link
+ * net.schmizz.sshj.transport.cipher.AES128CBC}, {@link net.schmizz.sshj.transport.cipher.AES192CBC}, {@link net.schmizz.sshj.transport.cipher.AES256CBC}, {@link net.schmizz.sshj.transport.cipher.AES192CBC}, {@link net.schmizz.sshj.transport.cipher.TripleDESCBC}, {@link net.schmizz.sshj.transport.cipher.BlowfishCBC}</li>
  * <li>{@link net.schmizz.sshj.ConfigImpl#setMACFactories MAC}: {@link net.schmizz.sshj.transport.mac.HMACSHA1}, {@link net.schmizz.sshj.transport.mac.HMACSHA196}, {@link net.schmizz.sshj.transport.mac.HMACMD5}, {@link
  * net.schmizz.sshj.transport.mac.HMACMD596}</li>
  * <li>{@link net.schmizz.sshj.ConfigImpl#setCompressionFactories Compression}: {@link net.schmizz.sshj.transport.compression.NoneCompression}</li>
@@ -151,13 +172,14 @@ public class DefaultConfig
 
     protected void initCipherFactories() {
         List<Factory.Named<Cipher>> avail = new LinkedList<Factory.Named<Cipher>>(Arrays.<Factory.Named<Cipher>>asList(
-                BlockCiphers.AES128CBC(),
-                BlockCiphers.AES128CTR(),
-                BlockCiphers.AES192CBC(),
-                BlockCiphers.AES192CTR(),
-                BlockCiphers.AES256CBC(),
-                BlockCiphers.AES256CTR(),
-                BlockCiphers.BlowfishCBC(),
+                new AES128CTR.Factory(),
+                new AES192CTR.Factory(),
+                new AES256CTR.Factory(),
+                new AES128CBC.Factory(),
+                new AES192CBC.Factory(),
+                new AES256CBC.Factory(),
+                new TripleDESCBC.Factory(),
+                new BlowfishCBC.Factory(),
                 BlockCiphers.BlowfishCTR(),
                 BlockCiphers.Cast128CBC(),
                 BlockCiphers.Cast128CTR(),
@@ -169,7 +191,6 @@ public class DefaultConfig
                 BlockCiphers.Serpent192CTR(),
                 BlockCiphers.Serpent256CBC(),
                 BlockCiphers.Serpent256CTR(),
-                BlockCiphers.TripleDESCBC(),
                 BlockCiphers.TripleDESCTR(),
                 BlockCiphers.Twofish128CBC(),
                 BlockCiphers.Twofish128CTR(),

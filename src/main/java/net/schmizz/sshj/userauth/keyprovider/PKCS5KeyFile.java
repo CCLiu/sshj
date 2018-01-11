@@ -15,15 +15,6 @@
  */
 package net.schmizz.sshj.userauth.keyprovider;
 
-import com.hierynomus.sshj.transport.cipher.BlockCiphers;
-import net.schmizz.sshj.common.Base64;
-import net.schmizz.sshj.common.ByteArrayUtils;
-import net.schmizz.sshj.common.IOUtils;
-import net.schmizz.sshj.common.KeyType;
-import net.schmizz.sshj.transport.cipher.*;
-import net.schmizz.sshj.transport.digest.Digest;
-import net.schmizz.sshj.transport.digest.MD5;
-
 import java.io.BufferedReader;
 import java.io.EOFException;
 import java.io.IOException;
@@ -33,6 +24,14 @@ import java.nio.CharBuffer;
 import java.security.*;
 import java.security.spec.*;
 import java.util.Arrays;
+import javax.xml.bind.DatatypeConverter;
+
+import net.schmizz.sshj.common.Base64;
+import net.schmizz.sshj.common.IOUtils;
+import net.schmizz.sshj.common.KeyType;
+import net.schmizz.sshj.transport.cipher.*;
+import net.schmizz.sshj.transport.digest.Digest;
+import net.schmizz.sshj.transport.digest.MD5;
 
 /**
  * Represents a PKCS5-encoded key file. This is the format typically used by OpenSSH, OpenSSL, Amazon, etc.
@@ -117,17 +116,17 @@ public class PKCS5KeyFile extends BaseFileKeyProvider {
                         } else {
                             String algorithm = line.substring(10, ptr);
                             if ("DES-EDE3-CBC".equals(algorithm)) {
-                                cipher = BlockCiphers.TripleDESCBC().create();
+                                cipher = new TripleDESCBC();
                             } else if ("AES-128-CBC".equals(algorithm)) {
-                                cipher = BlockCiphers.AES128CBC().create();
+                                cipher = new AES128CBC();
                             } else if ("AES-192-CBC".equals(algorithm)) {
-                                cipher = BlockCiphers.AES192CBC().create();
+                                cipher = new AES192CBC();
                             } else if ("AES-256-CBC".equals(algorithm)) {
-                                cipher = BlockCiphers.AES256CBC().create();
+                                cipher = new AES256CBC();
                             } else {
                                 throw new FormatException("Not a supported algorithm: " + algorithm);
                             }
-                            iv = Arrays.copyOfRange(ByteArrayUtils.parseHex(line.substring(ptr + 1)), 0, cipher.getIVSize());
+                            iv = Arrays.copyOfRange(DatatypeConverter.parseHexBinary(line.substring(ptr + 1)), 0, cipher.getIVSize());
                         }
                     } else if (line.length() > 0) {
                         sb.append(line);

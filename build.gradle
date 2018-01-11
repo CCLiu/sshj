@@ -1,32 +1,22 @@
 import java.text.SimpleDateFormat
-import com.bmuschko.gradle.docker.tasks.container.*
-import com.bmuschko.gradle.docker.tasks.image.*
 
 plugins {
   id "java"
   id "groovy"
-  id "jacoco"
   id "osgi"
   id "maven-publish"
-  id "com.bmuschko.docker-remote-api" version "3.2.1"
-  id 'pl.allegro.tech.build.axion-release' version '1.8.1'
+  id "org.ajoberstar.release-opinion" version "1.4.2"
   id "com.github.hierynomus.license" version "0.12.1"
   id "com.jfrog.bintray" version "1.7"
-  id 'ru.vyarus.java-lib' version '1.0.5'
-  // id 'ru.vyarus.pom' version '1.0.3'
+  id 'ru.vyarus.pom' version '1.0.3'
   id 'ru.vyarus.github-info' version '1.1.0'
-  id 'ru.vyarus.animalsniffer' version '1.4.2'
 }
 
 group = "com.hierynomus"
-
 defaultTasks "build"
 
 repositories {
   mavenCentral()
-  maven {
-    url "https://dl.bintray.com/mockito/maven/"
-  }
 }
 
 sourceCompatibility = 1.6
@@ -34,21 +24,19 @@ targetCompatibility = 1.6
 
 configurations.compile.transitive = false
 
-def bouncycastleVersion = "1.57"
+def bouncycastleVersion = "1.56"
 
 dependencies {
-  signature 'org.codehaus.mojo.signature:java16:1.1@signature'
-
   compile "org.slf4j:slf4j-api:1.7.7"
   compile "org.bouncycastle:bcprov-jdk15on:$bouncycastleVersion"
   compile "org.bouncycastle:bcpkix-jdk15on:$bouncycastleVersion"
   compile "com.jcraft:jzlib:1.1.3"
 
-  compile "net.i2p.crypto:eddsa:0.2.0"
+  compile "net.i2p.crypto:eddsa:0.1.0"
 
   testCompile "junit:junit:4.11"
   testCompile 'org.spockframework:spock-core:1.0-groovy-2.4'
-  testCompile "org.mockito:mockito-core:2.9.2"
+  testCompile "org.mockito:mockito-core:2.8.47"
   testCompile "org.apache.sshd:sshd-core:1.2.0"
   testRuntime "ch.qos.logback:logback-classic:1.1.2"
   testCompile 'org.glassfish.grizzly:grizzly-http-server:2.3.17'
@@ -65,18 +53,13 @@ license {
   excludes(['**/djb/Curve25519.java', '**/sshj/common/Base64.java'])
 }
 
-scmVersion {
-  tag {
-    prefix = 'v'
-    versionSeparator = ''
+if (project.file('.git').isDirectory()) {
+  release {
+    grgit = org.ajoberstar.grgit.Grgit.open(project.projectDir)
   }
-  hooks {
-    pre 'fileUpdate', [file: 'README.adoc', pattern: { v, c -> /:sshj_version: .*/}, replacement: { v, c -> ":sshj_version: $v" }]
-    pre 'commit'
-  }
+} else {
+  version = "0.0.0-no.git"
 }
-
-project.version = scmVersion.version
 
 // This disables the pedantic doclint feature of JDK8
 if (JavaVersion.current().isJava8Compatible()) {
@@ -95,6 +78,7 @@ task writeSshjVersionProperties {
 }
 
 jar.dependsOn writeSshjVersionProperties
+
 jar {
   manifest {
     // please see http://bnd.bndtools.org/chapters/390-wrapping.html
@@ -115,7 +99,14 @@ jar {
   }
 }
 
-sourcesJar {
+task javadocJar(type: Jar) {
+  classifier = 'javadoc'
+  from javadoc
+}
+
+task sourcesJar(type: Jar) {
+  classifier = 'sources'
+  from sourceSets.main.allSource
   manifest {
     attributes(
       // Add the needed OSGI attributes
@@ -126,27 +117,6 @@ sourcesJar {
       "Bundle-SymbolicName": "${project.jar.manifest.symbolicName}.source"
     )
   }
-}
-
-configurations {
-  integrationTestCompile.extendsFrom testCompile
-  integrationTestRuntime.extendsFrom testRuntime
-}
-
-sourceSets {
-  integrationTest {
-    groovy {
-      compileClasspath += sourceSets.main.output + sourceSets.test.output
-      runtimeClasspath += sourceSets.main.output + sourceSets.test.output
-      srcDir file('src/itest/groovy')
-    }
-    resources.srcDir file('src/itest/resources')
-  }
-}
-
-task integrationTest(type: Test) {
-  testClassesDirs = sourceSets.integrationTest.output.classesDirs
-  classpath = sourceSets.integrationTest.runtimeClasspath
 }
 
 tasks.withType(Test) {
@@ -215,12 +185,21 @@ pom {
   }
 }
 
+publishing.publications {
+  Sshj(MavenPublication) {
+    from components.java
+    artifact sourcesJar
+    artifact javadocJar
+  }
+}
+
+
 if (project.hasProperty("bintrayUsername") && project.hasProperty("bintrayApiKey")) {
   bintray {
     user = project.property("bintrayUsername")
     key = project.property("bintrayApiKey")
     publish = true
-    publications = ["maven"]
+    publications = ["Sshj"]
     pkg {
       repo = "maven"
       name = project.name
@@ -247,38 +226,4 @@ if (project.hasProperty("bintrayUsername") && project.hasProperty("bintrayApiKey
   }
 }
 
-jacocoTestReport {
-    reports {
-        xml.enabled true
-        html.enabled true
-    }
-}
-
-
-task buildItestImage(type: DockerBuildImage) {
-    inputDir = file('src/itest/docker-image')
-    tag = 'sshj/sshd-itest'
-}
-
-task createItestContainer(type: DockerCreateContainer) {
-    dependsOn buildItestImage
-    targetImageId { buildItestImage.getImageId() }
-    portBindings = ['2222:22']
-}
-
-task startItestContainer(type: DockerStartContainer) {
-    dependsOn createItestContainer
-    targetContainerId { createItestContainer.getContainerId() }
-}
-
-task stopItestContainer(type: DockerStopContainer) {
-    targetContainerId { createItestContainer.getContainerId() }
-}
-
-project.tasks.integrationTest.dependsOn(startItestContainer)
-project.tasks.integrationTest.finalizedBy(stopItestContainer)
-
-project.tasks.release.dependsOn([project.tasks.integrationTest, project.tasks.build])
-project.tasks.release.finalizedBy(project.tasks.bintrayUpload)
-project.tasks.jacocoTestReport.dependsOn(project.tasks.test)
-project.tasks.check.dependsOn(project.tasks.jacocoTestReport)
+project.tasks.release.dependsOn([project.tasks.build, project.tasks.bintrayUpload])

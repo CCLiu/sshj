@@ -15,48 +15,34 @@
  */
 package net.schmizz.sshj.signature;
 
-import net.schmizz.sshj.common.Buffer;
 import net.schmizz.sshj.common.SSHRuntimeException;
 import net.schmizz.sshj.common.SecurityUtils;
 
-import java.security.*;
+import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.SignatureException;
 
-/**
- * An abstract class for {@link Signature} that implements common functionality.
- */
+/** An abstract class for {@link Signature} that implements common functionality. */
 public abstract class AbstractSignature
         implements Signature {
 
-    @SuppressWarnings("PMD.UnnecessaryFullyQualifiedName")
-    protected final java.security.Signature signature;
+    protected final String algorithm;
+    protected java.security.Signature signature;
 
     protected AbstractSignature(String algorithm) {
+        this.algorithm = algorithm;
+    }
+
+    @Override
+    public void init(PublicKey publicKey, PrivateKey privateKey) {
         try {
-            this.signature = SecurityUtils.getSignature(algorithm);
+            signature = SecurityUtils.getSignature(algorithm);
+            if (publicKey != null)
+                signature.initVerify(publicKey);
+            if (privateKey != null)
+                signature.initSign(privateKey);
         } catch (GeneralSecurityException e) {
-            throw new SSHRuntimeException(e);
-        }
-    }
-
-    protected AbstractSignature(@SuppressWarnings("PMD.UnnecessaryFullyQualifiedName")
-                                        java.security.Signature signatureEngine) {
-        this.signature = signatureEngine;
-    }
-
-    @Override
-    public void initVerify(PublicKey publicKey) {
-        try {
-            signature.initVerify(publicKey);
-        } catch (InvalidKeyException e) {
-            throw new SSHRuntimeException(e);
-        }
-    }
-
-    @Override
-    public void initSign(PrivateKey privateKey) {
-        try {
-            signature.initSign(privateKey);
-        } catch (InvalidKeyException e) {
             throw new SSHRuntimeException(e);
         }
     }
@@ -84,24 +70,23 @@ public abstract class AbstractSignature
         }
     }
 
-    /**
-     * Check whether the signature is generated using the expected algorithm, and if so, return the signature blob
-     *
-     * @param sig                  The full signature
-     * @param expectedKeyAlgorithm The expected key algorithm
-     * @return The blob part of the signature
-     */
-    protected byte[] extractSig(byte[] sig, String expectedKeyAlgorithm) {
-        Buffer.PlainBuffer buffer = new Buffer.PlainBuffer(sig);
-        try {
-            String algo = buffer.readString();
-            if (!expectedKeyAlgorithm.equals(algo)) {
-                throw new SSHRuntimeException("Expected '" + expectedKeyAlgorithm + "' key algorithm, but got: " + algo);
-            }
-            return buffer.readBytes();
-        } catch (Buffer.BufferException e) {
-            throw new SSHRuntimeException(e);
+    protected byte[] extractSig(byte[] sig) {
+        if (sig[0] == 0 && sig[1] == 0 && sig[2] == 0) {
+            int i = 0;
+            int j = sig[i++] << 24 & 0xff000000
+                    | sig[i++] << 16 & 0x00ff0000
+                    | sig[i++] << 8 & 0x0000ff00
+                    | sig[i++] & 0x000000ff;
+            i += j;
+            j = sig[i++] << 24 & 0xff000000
+                    | sig[i++] << 16 & 0x00ff0000
+                    | sig[i++] << 8 & 0x0000ff00
+                    | sig[i++] & 0x000000ff;
+            byte[] newSig = new byte[j];
+            System.arraycopy(sig, i, newSig, 0, j);
+            return newSig;
         }
+        return sig;
     }
 
 }

@@ -32,6 +32,7 @@ package net.schmizz.sshj.util;
 
 import net.schmizz.sshj.common.Buffer;
 import net.schmizz.sshj.common.IOUtils;
+
 import org.junit.Before;
 import org.junit.Test;
 

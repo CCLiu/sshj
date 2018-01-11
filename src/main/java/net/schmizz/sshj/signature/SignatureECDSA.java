@@ -15,18 +15,19 @@
  */
 package net.schmizz.sshj.signature;
 
-import net.schmizz.sshj.common.Buffer;
-import net.schmizz.sshj.common.KeyType;
-import net.schmizz.sshj.common.SSHRuntimeException;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.security.SignatureException;
+
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OutputStream;
 import org.bouncycastle.asn1.DERSequence;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.math.BigInteger;
-import java.security.SignatureException;
+import net.schmizz.sshj.common.Buffer;
+import net.schmizz.sshj.common.KeyType;
+import net.schmizz.sshj.common.SSHRuntimeException;
 
 /** ECDSA {@link Signature} */
 public class SignatureECDSA extends AbstractSignature {
@@ -98,7 +99,7 @@ public class SignatureECDSA extends AbstractSignature {
         System.arraycopy(sig, 4, r, 0, rLen);
         System.arraycopy(sig, 6 + rLen, s, 0, sLen);
 
-        Buffer.PlainBuffer buf = new Buffer.PlainBuffer();
+        Buffer buf = new Buffer.PlainBuffer();
         buf.putMPInt(new BigInteger(r));
         buf.putMPInt(new BigInteger(s));
 
@@ -107,9 +108,26 @@ public class SignatureECDSA extends AbstractSignature {
 
     @Override
     public boolean verify(byte[] sig) {
+        byte[] r;
+        byte[] s;
         try {
-            byte[] sigBlob = extractSig(sig, keyTypeName);
-            return signature.verify(asnEncode(sigBlob));
+            Buffer sigbuf = new Buffer.PlainBuffer(sig);
+            final String algo = new String(sigbuf.readBytes());
+            if (!keyTypeName.equals(algo)) {
+                throw new SSHRuntimeException(String.format("Signature :: " + keyTypeName + " expected, got %s", algo));
+            }
+            final int rsLen = sigbuf.readUInt32AsInt();
+            if (sigbuf.available() != rsLen) {
+                throw new SSHRuntimeException("Invalid key length");
+            }
+            r = sigbuf.readBytes();
+            s = sigbuf.readBytes();
+        } catch (Exception e) {
+            throw new SSHRuntimeException(e);
+        }
+
+        try {
+            return signature.verify(asnEncode(r, s));
         } catch (SignatureException e) {
             throw new SSHRuntimeException(e);
         } catch (IOException e) {
@@ -117,19 +135,29 @@ public class SignatureECDSA extends AbstractSignature {
         }
     }
 
-    /**
-     * Encodes the signature as a DER sequence (ASN.1 format).
-     */
-    private byte[] asnEncode(byte[] sigBlob) throws IOException {
-        Buffer.PlainBuffer sigbuf = new Buffer.PlainBuffer(sigBlob);
-        byte[] r = sigbuf.readBytes();
-        byte[] s = sigbuf.readBytes();
+    private byte[] asnEncode(byte[] r, byte[] s) throws IOException {
+        int rLen = r.length;
+        int sLen = s.length;
+
+        /*
+         * We can't have the high bit set, so add an extra zero at the beginning
+         * if so.
+         */
+        if ((r[0] & 0x80) != 0) {
+            rLen++;
+        }
+        if ((s[0] & 0x80) != 0) {
+            sLen++;
+        }
+
+        /* Calculate total output length */
+        int length = 6 + rLen + sLen;
 
         ASN1EncodableVector vector = new ASN1EncodableVector();
         vector.add(new ASN1Integer(r));
         vector.add(new ASN1Integer(s));
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(length);
         ASN1OutputStream asnOS = new ASN1OutputStream(baos);
 
         asnOS.writeObject(new DERSequence(vector));
